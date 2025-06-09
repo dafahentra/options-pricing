@@ -28,7 +28,7 @@ from models import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Options Analytics Pro",
+    page_title="Options Pricing Analytics",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -80,7 +80,7 @@ st.markdown("""
 st.markdown("""
     <div class="main-header">
         <h1>Options Analytics Pro</h1>
-        <p>Advanced Options Pricing, Greeks Analysis & Risk Management Platform</p>
+        <p>Extensive Options Pricing, Greeks Analysis & Risk Management Platform</p>
     </div>
 """, unsafe_allow_html=True)
 

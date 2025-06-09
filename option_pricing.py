@@ -1,692 +1,137 @@
-"""
-Modern Options Pricing and Risk Analytics Dashboard
-==================================================
-
-A comprehensive Streamlit application for option pricing, Greeks analysis,
-and risk management with advanced visualizations and multiple pricing models.
-
-Author: Senior Developer
-Version: 2.0
-"""
-
 import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-import seaborn as sns
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+import numpy as np
+from models import black_scholes, monte_carlo_option
+import plotly.graph_objects as go
 
-# Import our enhanced models
-from models import (
-    OptionParameters, OptionType, ModelType, PricingResult,
-    BlackScholesModel, MonteCarloModel, BinomialModel,
-    ImpliedVolatilityCalculator
-)
-
-# Page configuration
 st.set_page_config(
-    page_title="Options Analytics Pro",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Options Pricing",
+    layout="wide"
 )
 
-# Custom CSS for modern styling
-st.markdown("""
-    <style>
-    .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
-    }
-    .risk-alert {
-        background: #b02a37; /* deep red */
-        border-left: 6px solid #7a1c24;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(176, 42, 55, 0.4);
-    }
+st.title("Options Pricing and Risk Assessment Tool")
+with st.expander("about this tool"):
+    st.caption("The Option Pricing and Risk Assessment Tool helps you calculate the fair price of options and evaluate potential risks using two methods: the Black-Scholes Model for theoretical pricing and Monte Carlo Simulations to simulate future price outcomes. With this tool, you can easily calculate option prices for both Call and Put options, visualize the distribution of simulated asset prices at maturity, and analyze risk metrics like Value at Risk (VaR) and Expected Shortfall (ES). Simply input your parameters and explore interactive charts and insights into pricing and risk.")
 
-    .success-alert {
-        background: #157347; /* deep green */
-        border-left: 6px solid #0f5132;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(21, 115, 71, 0.4);
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.sidebar.header("Option Parameters")
+S = st.sidebar.number_input("Current Stock Price (S)", min_value=0.0, value=100.0)
+K = st.sidebar.number_input("Strike Price (K)", min_value=0.0, value=100.0)
+T = st.sidebar.number_input("Time to Maturity (T, in years)", min_value=0.01, value=1.0)
+r = st.sidebar.number_input("Risk-Free Rate (r)", min_value=0.0, value=0.05, step=0.01)
+sigma = st.sidebar.number_input("Volatility (σ)", min_value=0.01, value=0.2, step=0.01)
+option_type = st.sidebar.selectbox("Option Type", ["call", "put"])
+simulations = st.sidebar.slider("Monte Carlo Simulations", 1000, 50000, 10000)
 
-# Main header
-st.markdown("""
-    <div class="main-header">
-        <h1>Options Analytics Pro</h1>
-        <p>Advanced Options Pricing, Greeks Analysis & Risk Management Platform</p>
-    </div>
-""", unsafe_allow_html=True)
+# Black-Scholes Pricing
+with st.container(border=True):
+    c1,c2 = st.columns([10,1])
+    c1.subheader("Black-Scholes Pricing")
+    with c2.popover(":material/info:"):
+        st.markdown("""
+            The **Black-Scholes Model** is a widely-used mathematical formula for pricing European-style options. It calculates the fair value of a call or put option based on key factors like the current stock price, strike price, time to expiration, volatility, and the risk-free interest rate.
 
-# Initialize session state
-if 'pricing_history' not in st.session_state:
-    st.session_state.pricing_history = []
-if 'scenario_data' not in st.session_state:
-    st.session_state.scenario_data = None
+            The formula for the **call option price (C)** is:
 
-# Sidebar configuration
-with st.sidebar:
-    st.header("Option Configuration")
-    
-    # Basic Parameters
-    with st.expander("Market Parameters", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            S = st.number_input("Stock Price ($)", min_value=0.01, value=100.0, step=0.01)
-            K = st.number_input("Strike Price ($)", min_value=0.01, value=100.0, step=0.01)
-            T = st.number_input("Time to Expiry (Years)", min_value=0.001, value=0.25, step=0.001)
-        with col2:
-            r = st.number_input("Risk-Free Rate (%)", min_value=0.0, value=5.0, step=0.1) / 100
-            sigma = st.number_input("Volatility (%)", min_value=0.1, value=20.0, step=0.1) / 100
-            q = st.number_input("Dividend Yield (%)", min_value=0.0, value=0.0, step=0.1) / 100
-    
-    # Option Configuration
-    with st.expander("Option Settings", expanded=True):
-        option_type_str = st.selectbox("Option Type", ["Call", "Put"])
-        option_type = OptionType.CALL if option_type_str == "Call" else OptionType.PUT
-        
-        # Advanced settings
-        st.subheader("Advanced Settings")
-        mc_simulations = st.slider("Monte Carlo Simulations", 10000, 200000, 100000, 10000)
-        binomial_steps = st.slider("Binomial Steps", 50, 300, 100, 10)
-        american_style = st.checkbox("American Style Option", value=False)
-        use_antithetic = st.checkbox("Use Antithetic Variates", value=True)
-        use_control_variate = st.checkbox("Use Control Variates", value=True)
+            $$
+            C = S_0 \cdot N(d_1) - K \cdot e^{-rT} \cdot N(d_2)
+            $$
+            For the **put option price (P)**:
 
-# Create option parameters
-try:
-    params = OptionParameters(S=S, K=K, T=T, r=r, sigma=sigma, option_type=option_type, q=q)
-except ValueError as e:
-    st.error(f"❌ Parameter Error: {e}")
-    st.stop()
+            $$
+            P = K \cdot e^{-rT} \cdot N(-d_2) - S_0 \cdot N(-d_1)
+            $$
 
-# Main dashboard tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "Pricing Models", "Greeks Analysis", "Scenario Analysis", 
-    "Risk Metrics", "Implied Volatility", "Advanced Analytics"
-])
+            Where:
+            - $$ S_0 $$ is the current stock price
+            - $$ K $$ is the strike price
+            - $$ T $$ is the time to maturity (in years)
+            - $$ r $$ is the risk-free interest rate
+            - $$ \sigma $$ is the volatility of the stock
+            - $$ N(x) $$ is the cumulative distribution function (CDF) of the standard normal distribution
 
-# Tab 1: Pricing Models Comparison
-with tab1:
-    st.header("Multi-Model Pricing Comparison")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Calculate prices using different models
-        with st.spinner("Calculating option prices..."):
-            # Black-Scholes
-            bs_result = BlackScholesModel.calculate_all(params)
-            
-            # Monte Carlo
-            mc_price, S_T = MonteCarloModel.price(
-                params, mc_simulations, use_antithetic, use_control_variate
-            )
-            
-            # Binomial
-            bin_price = BinomialModel.price(params, binomial_steps, american_style)
-        
-        # Create comparison dataframe
-        pricing_data = {
-            'Model': ['Black-Scholes', 'Monte Carlo', 'Binomial Tree'],
-            'Price': [bs_result.price, mc_price, bin_price],
-            'Difference from BS': [0, mc_price - bs_result.price, bin_price - bs_result.price],
-            'Difference %': [0, ((mc_price - bs_result.price) / bs_result.price) * 100,
-                           ((bin_price - bs_result.price) / bs_result.price) * 100]
-        }
-        
-        df_pricing = pd.DataFrame(pricing_data)
-        
-        # Display pricing table
-        cmap = 'RdYlGn'  # atau coba 'RdYlGn' untuk sinyal positif-negatif
-        st.subheader("Pricing Comparison Table")
-        st.dataframe(
-            df_pricing.style.format({
-                'Price': '${:.4f}',
-                'Difference from BS': '${:.4f}',
-                'Difference %': '{:.2f}%'
-            }).background_gradient(cmap=cmap, subset=['Price']),
-            use_container_width=True
+            This model is useful for estimating the price of options in markets with efficient pricing and no dividends.
+            """)
+    bs_price = black_scholes(S, K, T, r, sigma, option_type)
+    st.write(f"The {option_type.capitalize()} option price using Black-Scholes Model is: **${bs_price:.2f}**")
+
+# Monte Carlo Simulation
+with st.container(border=True):
+    c1,c2 = st.columns([10,1])
+    c1.subheader("Monte Carlo Simulation")
+    with c2.popover(":material/info:"):
+        st.markdown("""
+            **Monte Carlo Simulation** is a powerful method for estimating option prices by simulating the potential future movements of the asset's price. By running many random simulations, this method helps visualize the range of possible outcomes and estimate the expected price of the option.
+
+            The simulation uses the following formula for each simulated price path:
+
+            $$
+            S_T = S_0 \cdot e^{(r - 0.5 \sigma^2)T + \sigma \sqrt{T} \cdot Z}
+            $$
+
+            Where:
+            - $$ S_0 $$ is the initial stock price
+            - $$ r $$ is the risk-free rate
+            - $$ \sigma $$ is the volatility
+            - $$ T $$ is the time to maturity
+            - $$ Z $$ is a random variable generated from a standard normal distribution ($$ Z \sim N(0, 1) $$)
+
+            The simulation runs many iterations (e.g., 10,000 or more) to generate possible future prices, and the option price is then the average of the discounted payoffs at maturity.
+
+            Monte Carlo simulations are especially useful when the Black-Scholes model is not applicable or when options have complex features like American-style options or early exercise possibilities.
+            """)
+    mc_price, S_T = monte_carlo_option(S, K, T, r, sigma, simulations, option_type)
+    st.write(f"The {option_type.capitalize()} option price using Monte Carlo Simulation is: **${mc_price:.2f}**")
+
+# Plot the Distribution of Simulated Prices
+with st.container(border=True):
+    st.subheader("Distribution of Simulated Prices at Maturity")
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Histogram(
+            x=S_T,  # Simulated prices at maturity
+            nbinsx=50,  # Number of bins
+            marker_color="#c584f7", 
+            marker_line_color="black",
+            marker_line_width=1.2
         )
-    
-    with col2:
-        # Key metrics cards
-        st.subheader("Key Metrics")
-        
-        # Moneyness
-        moneyness = S / K
-        if moneyness > 1.05:
-            moneyness_status = "ITM"
-        elif moneyness < 0.95:
-            moneyness_status = "OTM"
-        else:
-            moneyness_status = "ATM"
-        
-        st.metric("Moneyness", f"{moneyness:.3f}", moneyness_status)
-        st.metric("Time Value", f"${bs_result.price - max(S-K if option_type==OptionType.CALL else K-S, 0):.4f}")
-        st.metric("Annualized Vol", f"{sigma*100:.1f}%")
-        
-        # Quick trade recommendation
-        if bs_result.price > 0:
-            premium_pct = (bs_result.price / S) * 100
-            if premium_pct > 5:
-                st.markdown('<div class="risk-alert">High Premium Option</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="success-alert">Reasonable Premium</div>', unsafe_allow_html=True)
-    
-    # Pricing visualization
-    st.subheader("Model Comparison Visualization")
-    fig_pricing = go.Figure()
-    
-    models = ['Black-Scholes', 'Monte Carlo', 'Binomial']
-    prices = [bs_result.price, mc_price, bin_price]
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
-    
-    fig_pricing.add_trace(go.Bar(
-        x=models,
-        y=prices,
-        marker_color=colors,
-        text=[f'${p:.4f}' for p in prices],
-        textposition='auto',
-    ))
-    
-    fig_pricing.update_layout(
-        title="Option Price Comparison Across Models",
-        yaxis_title="Option Price ($)",
-        showlegend=False,
-        height=400
     )
-    
-    st.plotly_chart(fig_pricing, use_container_width=True)
+    fig.update_layout(
+        title="Distribution of Simulated Asset Prices",
+        xaxis_title="Price",
+        yaxis_title="Frequency",
+        bargap=0.05,  # Space between bars
+    )
 
-# Tab 2: Greeks Analysis
-with tab2:
-    st.header("Greeks Analysis Dashboard")
-    
-    # Greeks overview
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric("Delta (Δ)", f"{bs_result.delta:.4f}", 
-                 "Price sensitivity")
-    with col2:
-        st.metric("Gamma (Γ)", f"{bs_result.gamma:.4f}",
-                 "Delta sensitivity")
-    with col3:
-        st.metric("Theta (Θ)", f"{bs_result.theta:.4f}",
-                 "Time decay")
-    with col4:
-        st.metric("Vega (ν)", f"{bs_result.vega:.4f}",
-                 "Vol sensitivity")
-    with col5:
-        st.metric("Rho (ρ)", f"{bs_result.rho:.4f}",
-                 "Rate sensitivity")
-    
-    # Greeks visualization
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Greeks Spider Chart")
-        
-        # Normalize Greeks for spider chart
-        greeks_data = {
-            'Greek': ['Delta', 'Gamma', 'Theta', 'Vega', 'Rho'],
-            'Value': [bs_result.delta, bs_result.gamma*10, bs_result.theta*10, 
-                     bs_result.vega/10, bs_result.rho/10],
-            'Actual': [bs_result.delta, bs_result.gamma, bs_result.theta,
-                      bs_result.vega, bs_result.rho]
-        }
-        
-        fig_spider = go.Figure()
-        
-        fig_spider.add_trace(go.Scatterpolar(
-            r=greeks_data['Value'],
-            theta=greeks_data['Greek'],
-            fill='toself',
-            name='Greeks Profile',
-            line_color='#667eea'
-        ))
-        
-        fig_spider.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[-1, 1]
-                )),
-            showlegend=False,
-            height=400
-        )
-        
-        st.plotly_chart(fig_spider, use_container_width=True)
-    
-    with col2:
-        st.subheader("Delta-Gamma Profile")
-        
-        # Create spot price range for Greeks analysis
-        spot_range = np.linspace(S * 0.7, S * 1.3, 50)
-        deltas = []
-        gammas = []
-        
-        for spot in spot_range:
-            temp_params = OptionParameters(spot, K, T, r, sigma, option_type, q)
-            temp_result = BlackScholesModel.calculate_all(temp_params)
-            deltas.append(temp_result.delta)
-            gammas.append(temp_result.gamma)
-        
-        fig_dg = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        fig_dg.add_trace(
-            go.Scatter(x=spot_range, y=deltas, name="Delta", line=dict(color='#FF6B6B')),
-            secondary_y=False,
-        )
-        
-        fig_dg.add_trace(
-            go.Scatter(x=spot_range, y=gammas, name="Gamma", line=dict(color='#4ECDC4')),
-            secondary_y=True,
-        )
-        
-        fig_dg.add_vline(x=S, line_dash="dash", annotation_text="Current Price")
-        
-        fig_dg.update_yaxes(title_text="Delta", secondary_y=False)
-        fig_dg.update_yaxes(title_text="Gamma", secondary_y=True)
-        fig_dg.update_xaxes(title_text="Stock Price ($)")
-        
-        st.plotly_chart(fig_dg, use_container_width=True)
+    st.plotly_chart(fig)
 
-# Tab 3: Scenario Analysis
-with tab3:
-    st.header("Scenario Analysis")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("Scenario Settings")
-        
-        scenario_type = st.selectbox("Analysis Type", [
-            "Spot Price Movement", "Volatility Change", "Time Decay", "Interest Rate Change"
-        ])
-        
-        if scenario_type == "Spot Price Movement":
-            min_spot = st.number_input("Min Spot Price", value=S*0.5, step=0.01)
-            max_spot = st.number_input("Max Spot Price", value=S*1.5, step=0.01)
-            steps = st.slider("Number of Steps", 20, 100, 50)
-            
-        elif scenario_type == "Volatility Change":
-            min_vol = st.number_input("Min Volatility (%)", value=5.0, step=0.1) / 100
-            max_vol = st.number_input("Max Volatility (%)", value=50.0, step=0.1) / 100
-            steps = st.slider("Number of Steps", 20, 100, 50)
-            
-        elif scenario_type == "Time Decay":
-            time_steps = st.slider("Days to Analyze", 1, 365, 30)
-            steps = time_steps
-            
-        run_scenario = st.button("Run Scenario Analysis", type="primary")
-    
-    with col2:
-        if run_scenario:
-            st.subheader(f"{scenario_type} Analysis Results")
-            
-            with st.spinner("Running scenario analysis..."):
-                if scenario_type == "Spot Price Movement":
-                    spot_prices = np.linspace(min_spot, max_spot, steps)
-                    option_prices = []
-                    deltas = []
-                    
-                    for spot in spot_prices:
-                        temp_params = OptionParameters(spot, K, T, r, sigma, option_type, q)
-                        result = BlackScholesModel.calculate_all(temp_params)
-                        option_prices.append(result.price)
-                        deltas.append(result.delta)
-                    
-                    # Create P&L analysis
-                    initial_price = bs_result.price
-                    pnl = np.array(option_prices) - initial_price
-                    
-                    fig_scenario = make_subplots(
-                        rows=2, cols=1,
-                        subplot_titles=('Option Price vs Spot Price', 'P&L Analysis'),
-                        vertical_spacing=0.1
-                    )
-                    
-                    fig_scenario.add_trace(
-                        go.Scatter(x=spot_prices, y=option_prices, name="Option Price",
-                                 line=dict(color='#667eea', width=3)),
-                        row=1, col=1
-                    )
-                    
-                    fig_scenario.add_trace(
-                        go.Scatter(x=spot_prices, y=pnl, name="P&L",
-                                 line=dict(color='#FF6B6B', width=3),
-                                 fill='tonexty'),
-                        row=2, col=1
-                    )
-                    
-                    fig_scenario.add_vline(x=S, line_dash="dash", annotation_text="Current Price")
-                    fig_scenario.add_hline(y=0, line_dash="dash", row=2, col=1)
-                    
-                    fig_scenario.update_xaxes(title_text="Stock Price ($)", row=2, col=1)
-                    fig_scenario.update_yaxes(title_text="Option Price ($)", row=1, col=1)
-                    fig_scenario.update_yaxes(title_text="P&L ($)", row=2, col=1)
-                    
-                    st.plotly_chart(fig_scenario, use_container_width=True)
-                    
-                    # Scenario statistics
-                    col_a, col_b, col_c = st.columns(3)
-                    with col_a:
-                        st.metric("Max Profit", f"${max(pnl):.2f}")
-                    with col_b:
-                        st.metric("Max Loss", f"${min(pnl):.2f}")
-                    with col_c:
-                        breakeven_spots = spot_prices[np.abs(pnl) < 0.01]
-                        if len(breakeven_spots) > 0:
-                            st.metric("Breakeven", f"${breakeven_spots[0]:.2f}")
-                        else:
-                            st.metric("Breakeven", "N/A")
+# Value at Risk (VaR) and Expected Shortfall (ES)
+with st.container(border=True):
+    c1,c2 = st.columns([10,1])
+    c1.subheader("Risk Assessment Metrics")
+    with c2.popover(":material/info:"):
+        st.markdown("""
+            **Risk assessment** helps evaluate the potential downside of an option position. Two common risk metrics used are **Value at Risk (VaR)** and **Expected Shortfall (ES)**.
 
-# Tab 4: Risk Metrics
-with tab4:
-    st.header("Comprehensive Risk Analysis")
-    
-    # Monte Carlo risk analysis
-    with st.spinner("Calculating risk metrics..."):
-        mc_price, S_T = MonteCarloModel.price(params, mc_simulations)
-        
-        # Calculate option payoffs at expiration
-        if option_type == OptionType.CALL:
-            payoffs = np.maximum(S_T - K, 0)
-        else:
-            payoffs = np.maximum(K - S_T, 0)
-        
-        # Risk metrics
-        var_95 = np.percentile(S_T, 5)
-        var_99 = np.percentile(S_T, 1)
-        es_95 = S_T[S_T <= var_95].mean() if len(S_T[S_T <= var_95]) > 0 else var_95
-        es_99 = S_T[S_T <= var_99].mean() if len(S_T[S_T <= var_99]) > 0 else var_99
-        
-        # Payoff statistics
-        mean_payoff = np.mean(payoffs)
-        std_payoff = np.std(payoffs)
-        max_payoff = np.max(payoffs)
-        prob_profit = np.mean(payoffs > bs_result.price) * 100
-    
-    # Risk metrics display
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("VaR (95%)", f"${var_95:.2f}", f"${var_95 - S:.2f}")
-        st.metric("Expected Shortfall (95%)", f"${es_95:.2f}")
-    
-    with col2:
-        st.metric("VaR (99%)", f"${var_99:.2f}", f"${var_99 - S:.2f}")
-        st.metric("Expected Shortfall (99%)", f"${es_99:.2f}")
-    
-    with col3:
-        st.metric("Mean Payoff", f"${mean_payoff:.2f}")
-        st.metric("Payoff Volatility", f"${std_payoff:.2f}")
-    
-    with col4:
-        st.metric("Max Payoff", f"${max_payoff:.2f}")
-        st.metric("Probability of Profit", f"{prob_profit:.1f}%")
-    
-    # Risk visualization
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Price Distribution at Expiry")
-        
-        fig_dist = go.Figure()
-        
-        fig_dist.add_trace(go.Histogram(
-            x=S_T,
-            nbinsx=50,
-            name="Price Distribution",
-            marker_color='#667eea',
-            opacity=0.7
-        ))
-        
-        fig_dist.add_vline(x=var_95, line_dash="dash", line_color="red",
-                          annotation_text=f"VaR 95%: ${var_95:.2f}")
-        fig_dist.add_vline(x=S, line_dash="dash", line_color="green",
-                          annotation_text=f"Current: ${S:.2f}")
-        
-        fig_dist.update_layout(
-            title="Simulated Stock Price Distribution",
-            xaxis_title="Stock Price ($)",
-            yaxis_title="Frequency"
-        )
-        
-        st.plotly_chart(fig_dist, use_container_width=True)
-    
-    with col2:
-        st.subheader("Payoff Distribution")
-        
-        fig_payoff = go.Figure()
-        
-        fig_payoff.add_trace(go.Histogram(
-            x=payoffs,
-            nbinsx=50,
-            name="Payoff Distribution",
-            marker_color='#4ECDC4',
-            opacity=0.7
-        ))
-        
-        fig_payoff.add_vline(x=bs_result.price, line_dash="dash", line_color="orange",
-                           annotation_text=f"Premium: ${bs_result.price:.2f}")
-        
-        fig_payoff.update_layout(
-            title="Option Payoff Distribution",
-            xaxis_title="Payoff ($)",
-            yaxis_title="Frequency"
-        )
-        
-        st.plotly_chart(fig_payoff, use_container_width=True)
+            - **Value at Risk (VaR)** is the worst potential loss over a specified time frame, at a given confidence level (e.g., 95% or 99%). It tells us, for example, "There is a 5% chance that the loss will exceed this amount."
 
-# Tab 5: Implied Volatility
-with tab5:
-    st.header("Implied Volatility Analysis")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("IV Calculator")
-        
-        market_price = st.number_input(
-            "Market Price ($)", 
-            min_value=0.01, 
-            value=bs_result.price, 
-            step=0.01,
-            help="Enter the observed market price of the option"
-        )
-        
-        calculate_iv = st.button("Calculate Implied Volatility", type="primary")
-        
-        if calculate_iv:
-            try:
-                with st.spinner("Calculating implied volatility..."):
-                    implied_vol = ImpliedVolatilityCalculator.calculate(market_price, params)
-                    
-                st.success(f"Implied Volatility: **{implied_vol*100:.2f}%**")
-                
-                # Compare with historical volatility
-                vol_diff = (implied_vol - sigma) * 100
-                if vol_diff > 5:
-                    st.warning(f"IV is {vol_diff:.1f}% higher than historical volatility")
-                elif vol_diff < -5:
-                    st.info(f"ℹIV is {abs(vol_diff):.1f}% lower than historical volatility")
-                else:
-                    st.success("IV is close to historical volatility")
-                    
-            except Exception as e:
-                st.error(f"Error calculating IV: {str(e)}")
-    
-    with col2:
-        st.subheader("Volatility Surface Analysis")
-        
-        # Create volatility surface
-        strikes = np.linspace(K * 0.8, K * 1.2, 10)
-        times = np.linspace(0.1, 1.0, 8)
-        
-        vol_surface = np.zeros((len(times), len(strikes)))
-        
-        for i, t in enumerate(times):
-            for j, k in enumerate(strikes):
-                temp_params = OptionParameters(S, k, t, r, sigma, option_type, q)
-                temp_price = BlackScholesModel.price(temp_params)
-                # Simulate market price with some noise
-                market_price_sim = temp_price * (1 + np.random.normal(0, 0.05))
-                try:
-                    iv = ImpliedVolatilityCalculator.calculate(market_price_sim, temp_params)
-                    vol_surface[i, j] = iv * 100
-                except:
-                    vol_surface[i, j] = sigma * 100
-        
-        fig_surface = go.Figure(data=[go.Surface(
-            z=vol_surface,
-            x=strikes,
-            y=times,
-            colorscale='Viridis',
-            colorbar_title="Implied Vol (%)"
-        )])
-        
-        fig_surface.update_layout(
-            title='Implied Volatility Surface',
-            scene=dict(
-                xaxis_title='Strike Price ($)',
-                yaxis_title='Time to Expiry (Years)',
-                zaxis_title='Implied Volatility (%)'
-            ),
-            height=500
-        )
-        
-        st.plotly_chart(fig_surface, use_container_width=True)
+            The formula for VaR at a confidence level $$ \\alpha $$ is:
 
-# Tab 6: Advanced Analytics
-with tab6:
-    st.header("Advanced Portfolio Analytics")
-    
-    # Portfolio simulation
-    st.subheader("Multi-Option Portfolio Analysis")
-    
-    with st.expander("Portfolio Builder", expanded=True):
-        num_positions = st.selectbox("Number of Positions", [1, 2, 3, 4, 5])
-        
-        portfolio_data = []
-        for i in range(num_positions):
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                pos_type = st.selectbox(f"Position {i+1} Type", ["Long Call", "Short Call", "Long Put", "Short Put"], key=f"type_{i}")
-            with col2:
-                pos_strike = st.number_input(f"Strike {i+1}", value=K, key=f"strike_{i}")
-            with col3:
-                pos_quantity = st.number_input(f"Quantity {i+1}", value=1, key=f"qty_{i}")
-            with col4:
-                pos_premium = st.number_input(f"Premium {i+1}", value=bs_result.price, key=f"prem_{i}")
-            
-            portfolio_data.append({
-                'type': pos_type,
-                'strike': pos_strike,
-                'quantity': pos_quantity,
-                'premium': pos_premium
-            })
-    
-    if st.button("Analyze Portfolio"):
-        # Calculate portfolio P&L
-        spot_range = np.linspace(S * 0.5, S * 1.5, 100)
-        portfolio_pnl = np.zeros(len(spot_range))
-        
-        for spot in range(len(spot_range)):
-            current_spot = spot_range[spot]
-            total_pnl = 0
-            
-            for pos in portfolio_data:
-                strike = pos['strike']
-                quantity = pos['quantity']
-                premium = pos['premium']
-                
-                if 'Call' in pos['type']:
-                    intrinsic = max(current_spot - strike, 0)
-                else:
-                    intrinsic = max(strike - current_spot, 0)
-                
-                if 'Long' in pos['type']:
-                    pnl = quantity * (intrinsic - premium)
-                else:
-                    pnl = quantity * (premium - intrinsic)
-                
-                total_pnl += pnl
-            
-            portfolio_pnl[spot] = total_pnl
-        
-        # Portfolio visualization
-        fig_portfolio = go.Figure()
-        
-        fig_portfolio.add_trace(go.Scatter(
-            x=spot_range,
-            y=portfolio_pnl,
-            mode='lines',
-            name='Portfolio P&L',
-            line=dict(color='#667eea', width=3),
-            fill='tonexty'
-        ))
-        
-        fig_portfolio.add_hline(y=0, line_dash="dash")
-        fig_portfolio.add_vline(x=S, line_dash="dash", annotation_text="Current Price")
-        
-        fig_portfolio.update_layout(
-            title="Portfolio P&L Diagram",
-            xaxis_title="Stock Price at Expiry ($)",
-            yaxis_title="Profit/Loss ($)",
-            height=500
-        )
-        
-        st.plotly_chart(fig_portfolio, use_container_width=True)
-        
-        # Portfolio statistics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Max Profit", f"${np.max(portfolio_pnl):.2f}")
-        with col2:
-            st.metric("Max Loss", f"${np.min(portfolio_pnl):.2f}")
-        with col3:
-            current_pnl = np.interp(S, spot_range, portfolio_pnl)
-            st.metric("Current P&L", f"${current_pnl:.2f}")
-        with col4:
-            breakeven_points = len(spot_range[np.abs(portfolio_pnl) < 1])
-            st.metric("Breakeven Points", f"{breakeven_points}")
+            $$
+            VaR = \mu + Z_{\\alpha} \cdot \sigma
+            $$
 
-# Footer
-st.markdown("---")
-st.markdown("""
-    <div style='text-align: center; color: #666; padding: 1rem;'>
-        <p>Options Analytics | Built with Streamlit</p>
-        <p><em>Disclaimer: This tool is for educational purposes only. Always consult with a financial advisor before making investment decisions.</em></p>
-    </div>
-""", unsafe_allow_html=True)
+            Where:
+            - $$ \mu $$ is the expected return
+            - $$ \sigma $$ is the standard deviation (volatility)
+            - $$ Z_{\\alpha} $$ is the Z-score corresponding to the confidence level (e.g., for 95%, $$ Z_{\\alpha} \\approx 1.65 $$)
+
+            - **Expected Shortfall (ES)** is the average loss that occurs when the loss exceeds the VaR threshold. It provides a more detailed view of the worst-case scenario, particularly when losses are extreme.
+
+            These risk metrics are important for understanding the potential for significant losses, especially in volatile markets, and can help in decision-making and risk management.
+            """)
+    VaR_95 = np.percentile(S_T, 5)
+    ES_95 = S_T[S_T <= VaR_95].mean()
+
+    st.write(f"**Value at Risk (VaR 95%)**: ${VaR_95:.2f}")
+    st.write(f"**Expected Shortfall (ES 95%)**: ${ES_95:.2f}")

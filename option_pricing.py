@@ -79,7 +79,7 @@ st.markdown("""
 # Main header
 st.markdown("""
     <div class="main-header">
-        <h1>Options Analytics Pro</h1>
+        <h1>Options Pricing Analytics</h1>
         <p>Extensive Options Pricing, Greeks Analysis & Risk Management Platform</p>
     </div>
 """, unsafe_allow_html=True)

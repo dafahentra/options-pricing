@@ -1,14 +1,3 @@
-"""
-Modern Options Pricing and Risk Analytics Dashboard
-==================================================
-
-A comprehensive Streamlit application for option pricing, Greeks analysis,
-and risk management with advanced visualizations and multiple pricing models.
-
-Author: Senior Developer
-Version: 2.0
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -26,6 +15,9 @@ from models import (
     ImpliedVolatilityCalculator
 )
 
+# Import custom styles
+from styles import load_css # Tambahkan baris ini
+
 # Page configuration
 st.set_page_config(
     page_title="Options Pricing Analytics",
@@ -35,46 +27,7 @@ st.set_page_config(
 )
 
 # Custom CSS for modern styling
-st.markdown("""
-    <style>
-    .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
-    }
-    .risk-alert {
-        background: #b02a37; /* deep red */
-        border-left: 6px solid #7a1c24;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(176, 42, 55, 0.4);
-    }
-
-    .success-alert {
-        background: #157347; /* deep green */
-        border-left: 6px solid #0f5132;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(21, 115, 71, 0.4);
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.markdown(load_css(), unsafe_allow_html=True) # Ubah baris ini
 
 # Main header
 st.markdown("""
@@ -254,14 +207,37 @@ with tab2:
     with col1:
         st.subheader("Greeks Spider Chart")
         
+        # --- MODIFIED CODE START ---
         # Normalize Greeks for spider chart
+        # Find the absolute maximum value among the Greeks for scaling
+        all_greeks_values = [
+            abs(bs_result.delta), 
+            abs(bs_result.gamma),
+            abs(bs_result.theta), 
+            abs(bs_result.vega), 
+            abs(bs_result.rho)
+        ]
+        
+        # Handle cases where all Greeks might be zero or very small to avoid division by zero
+        # Add a small epsilon to max_abs_greek if it's zero
+        max_abs_greek = max(all_greeks_values)
+        if max_abs_greek == 0:
+            max_abs_greek = 1 # Fallback to 1 to prevent division by zero
+
+        # Apply normalization to each Greek value
         greeks_data = {
             'Greek': ['Delta', 'Gamma', 'Theta', 'Vega', 'Rho'],
-            'Value': [bs_result.delta, bs_result.gamma*10, bs_result.theta*10, 
-                     bs_result.vega/10, bs_result.rho/10],
+            'Value': [
+                bs_result.delta / max_abs_greek,
+                bs_result.gamma / max_abs_greek,
+                bs_result.theta / max_abs_greek, 
+                bs_result.vega / max_abs_greek, 
+                bs_result.rho / max_abs_greek
+            ],
             'Actual': [bs_result.delta, bs_result.gamma, bs_result.theta,
                       bs_result.vega, bs_result.rho]
         }
+        # --- MODIFIED CODE END ---
         
         fig_spider = go.Figure()
         
@@ -277,7 +253,7 @@ with tab2:
             polar=dict(
                 radialaxis=dict(
                     visible=True,
-                    range=[-1, 1]
+                    range=[-1, 1] # Range adjusted to accommodate normalized values
                 )),
             showlegend=False,
             height=400

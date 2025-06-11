@@ -406,52 +406,233 @@ class BinomialModel:
 
 class ImpliedVolatilityCalculator:
     """
-    Calculator for implied volatility using Newton-Raphson method.
+    Enhanced Calculator for implied volatility using Newton-Raphson method with robust error handling.
     """
     
     @staticmethod
     def calculate(market_price: float,
                   params: OptionParameters,
                   max_iterations: int = 100,
-                  tolerance: float = 1e-6) -> float:
+                  tolerance: float = 1e-6,
+                  min_vol: float = 0.001,
+                  max_vol: float = 5.0) -> float:
         """
-        Calculate implied volatility from market price.
+        Calculate implied volatility from market price with robust error handling.
         
         Args:
             market_price: Observed market price
             params: OptionParameters (sigma will be ignored)
             max_iterations: Maximum number of iterations
             tolerance: Convergence tolerance
+            min_vol: Minimum volatility bound
+            max_vol: Maximum volatility bound
             
         Returns:
             Implied volatility
+            
+        Raises:
+            ValueError: If implied volatility cannot be calculated
         """
-        # Initial guess
-        sigma = 0.2
+        # Input validation
+        if market_price <= 0:
+            raise ValueError("Market price must be positive")
         
-        for _ in range(max_iterations):
-            params.sigma = sigma
-            
-            # Calculate price and vega
-            theoretical_price = BlackScholesModel.price(params)
-            vega = BlackScholesModel.vega(params)
-            
-            # Check convergence
-            price_diff = theoretical_price - market_price
-            if abs(price_diff) < tolerance:
-                return sigma
-            
-            # Newton-Raphson update
-            if vega == 0:
-                raise ValueError("Vega is zero, cannot calculate implied volatility")
-            
-            sigma = sigma - price_diff / vega
-            
-            # Keep sigma positive
-            sigma = max(sigma, 0.001)
+        if params.T <= 0:
+            raise ValueError("Time to expiry must be positive")
         
+        # Check if option has any time value
+        if params.option_type == OptionType.CALL:
+            intrinsic_value = max(params.S - params.K, 0)
+        else:
+            intrinsic_value = max(params.K - params.S, 0)
+        
+        if market_price < intrinsic_value:
+            raise ValueError("Market price is below intrinsic value")
+        
+        # If market price equals intrinsic value, volatility is essentially zero
+        if abs(market_price - intrinsic_value) < tolerance:
+            return min_vol
+        
+        # Initial guess using Brenner and Subrahmanyam approximation
+        sigma = ImpliedVolatilityCalculator._initial_guess(market_price, params)
+        sigma = max(min_vol, min(sigma, max_vol))
+        
+        # Newton-Raphson iteration with safeguards
+        for iteration in range(max_iterations):
+            # Create temporary parameters with current volatility
+            temp_params = OptionParameters(
+                S=params.S, K=params.K, T=params.T,
+                r=params.r, sigma=sigma, option_type=params.option_type, q=params.q
+            )
+            
+            try:
+                # Calculate price and vega
+                theoretical_price = BlackScholesModel.price(temp_params)
+                vega = BlackScholesModel.vega(temp_params)
+                
+                # Check for convergence
+                price_diff = theoretical_price - market_price
+                if abs(price_diff) < tolerance:
+                    return sigma
+                
+                # Check if vega is too small (near zero)
+                if abs(vega) < 1e-10:
+                    # Use alternative method or bisection fallback
+                    return ImpliedVolatilityCalculator._bisection_method(
+                        market_price, params, min_vol, max_vol, tolerance
+                    )
+                
+                # Newton-Raphson update
+                sigma_new = sigma - price_diff / vega
+                
+                # Apply bounds and dampening for stability
+                sigma_new = max(min_vol, min(sigma_new, max_vol))
+                
+                # Add dampening factor to prevent oscillation
+                if iteration > 10:
+                    dampening = 0.5
+                    sigma_new = sigma + dampening * (sigma_new - sigma)
+                
+                # Check for convergence in sigma
+                if abs(sigma_new - sigma) < tolerance:
+                    return sigma_new
+                
+                sigma = sigma_new
+                
+            except (ValueError, RuntimeError, OverflowError) as e:
+                # If numerical issues occur, fall back to bisection method
+                warnings.warn(f"Newton-Raphson failed at iteration {iteration}: {e}")
+                return ImpliedVolatilityCalculator._bisection_method(
+                    market_price, params, min_vol, max_vol, tolerance
+                )
+        
+        # If we reach here, convergence failed
         warnings.warn(f"Implied volatility did not converge after {max_iterations} iterations")
         return sigma
+    
+    @staticmethod
+    def _initial_guess(market_price: float, params: OptionParameters) -> float:
+        """
+        Generate initial guess for implied volatility using Brenner-Subrahmanyam approximation.
+        """
+        try:
+            # Brenner and Subrahmanyam approximation
+            sqrt_t = np.sqrt(params.T)
+            if sqrt_t > 0:
+                # For at-the-money options
+                if abs(params.S - params.K) / params.S < 0.1:
+                    return (market_price / params.S) * np.sqrt(2 * np.pi) / sqrt_t
+                else:
+                    # General approximation
+                    return 2 * market_price / (params.S * sqrt_t)
+            else:
+                return 0.2  # Default fallback
+        except:
+            return 0.2  # Default fallback
+    
+    @staticmethod
+    def _bisection_method(market_price: float, 
+                         params: OptionParameters,
+                         min_vol: float,
+                         max_vol: float,
+                         tolerance: float) -> float:
+        """
+        Bisection method as fallback for implied volatility calculation.
+        """
+        vol_low = min_vol
+        vol_high = max_vol
+        
+        # Check bounds
+        params_low = OptionParameters(
+            params.S, params.K, params.T, params.r, vol_low, params.option_type, params.q
+        )
+        params_high = OptionParameters(
+            params.S, params.K, params.T, params.r, vol_high, params.option_type, params.q
+        )
+        
+        price_low = BlackScholesModel.price(params_low)
+        price_high = BlackScholesModel.price(params_high)
+        
+        # Check if market price is within bounds
+        if market_price < price_low:
+            return vol_low
+        if market_price > price_high:
+            return vol_high
+        
+        # Bisection iteration
+        for _ in range(100):  # Maximum iterations for bisection
+            vol_mid = (vol_low + vol_high) / 2
+            
+            params_mid = OptionParameters(
+                params.S, params.K, params.T, params.r, vol_mid, params.option_type, params.q
+            )
+            price_mid = BlackScholesModel.price(params_mid)
+            
+            if abs(price_mid - market_price) < tolerance:
+                return vol_mid
+            
+            if price_mid < market_price:
+                vol_low = vol_mid
+            else:
+                vol_high = vol_mid
+            
+            if abs(vol_high - vol_low) < tolerance:
+                return (vol_low + vol_high) / 2
+        
+        return (vol_low + vol_high) / 2
+
+    @staticmethod
+    def calculate_iv_surface(S: float, K_range: np.ndarray, T_range: np.ndarray,
+                           r: float, option_type: OptionType, q: float = 0.0,
+                           base_vol: float = 0.2, vol_smile: bool = True) -> np.ndarray:
+        """
+        Generate a realistic implied volatility surface for visualization.
+        
+        Args:
+            S: Current stock price
+            K_range: Array of strike prices
+            T_range: Array of time to expiry values
+            r: Risk-free rate
+            option_type: Option type
+            q: Dividend yield
+            base_vol: Base volatility level
+            vol_smile: Whether to include volatility smile effect
+            
+        Returns:
+            2D array of implied volatilities
+        """
+        iv_surface = np.zeros((len(T_range), len(K_range)))
+        
+        for i, T in enumerate(T_range):
+            for j, K in enumerate(K_range):
+                try:
+                    # Calculate theoretical price with base volatility
+                    params = OptionParameters(S, K, T, r, base_vol, option_type, q)
+                    base_price = BlackScholesModel.price(params)
+                    
+                    # Add volatility smile/skew effects
+                    if vol_smile:
+                        # Moneyness effect (volatility smile)
+                        moneyness = np.log(S / K)
+                        smile_effect = 0.1 * moneyness**2  # Parabolic smile
+                        
+                        # Time effect (volatility term structure)
+                        time_effect = 0.05 * np.exp(-2 * T)  # Higher vol for short-term
+                        
+                        vol_adjustment = smile_effect + time_effect
+                        market_price = base_price * (1 + np.random.normal(0, 0.02))  # Add noise
+                        
+                        # Try to calculate IV
+                        iv = ImpliedVolatilityCalculator.calculate(market_price, params)
+                        iv_surface[i, j] = (iv + vol_adjustment) * 100
+                    else:
+                        iv_surface[i, j] = base_vol * 100
+                        
+                except Exception:
+                    # Fallback to base volatility if calculation fails
+                    iv_surface[i, j] = base_vol * 100
+        
+        return iv_surface
 
 
 # Convenience functions for backward compatibility

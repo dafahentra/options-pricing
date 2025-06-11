@@ -1,14 +1,3 @@
-"""
-Modern Options Pricing and Risk Analytics Dashboard
-==================================================
-
-A comprehensive Streamlit application for option pricing, Greeks analysis,
-and risk management with advanced visualizations and multiple pricing models.
-
-Author: Senior Developer
-Version: 2.0
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -26,6 +15,9 @@ from models import (
     ImpliedVolatilityCalculator
 )
 
+# Import custom styles
+from styles import load_css # Tambahkan baris ini
+
 # Page configuration
 st.set_page_config(
     page_title="Options Pricing Analytics",
@@ -35,46 +27,7 @@ st.set_page_config(
 )
 
 # Custom CSS for modern styling
-st.markdown("""
-    <style>
-    .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
-    }
-    .risk-alert {
-        background: #b02a37; /* deep red */
-        border-left: 6px solid #7a1c24;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box-shadow: 0 0 10px rgba(176, 42, 55, 0.4);
-    }
-
-    .success-alert {
-        background: #157347; /* deep green */
-        border-left: 6px solid #0f5132;
-        color: #ffffff;       /* white text */
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        font-weight: bold;
-        box_shadow: 0 0 10px rgba(21, 115, 71, 0.4);
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.markdown(load_css(), unsafe_allow_html=True) # Ubah baris ini
 
 # Main header
 st.markdown("""
@@ -530,7 +483,7 @@ with tab4:
         
         st.plotly_chart(fig_payoff, use_container_width=True)
 
-# Tab 5: Implied Volatility
+# Tab 5: Implied Volatility (FIXED VERSION)
 with tab5:
     st.header("Implied Volatility Analysis")
     
@@ -547,67 +500,254 @@ with tab5:
             help="Enter the observed market price of the option"
         )
         
+        # Advanced IV settings
+        with st.expander("Advanced IV Settings"):
+            max_iterations = st.slider("Max Iterations", 50, 200, 100)
+            tolerance = st.selectbox("Tolerance", [1e-4, 1e-5, 1e-6], index=2)
+            min_vol = st.number_input("Min Volatility (%)", value=0.1, step=0.1) / 100
+            max_vol = st.number_input("Max Volatility (%)", value=500.0, step=10.0) / 100
+        
         calculate_iv = st.button("Calculate Implied Volatility", type="primary")
         
         if calculate_iv:
             try:
                 with st.spinner("Calculating implied volatility..."):
-                    implied_vol = ImpliedVolatilityCalculator.calculate(market_price, params)
+                    # Use the enhanced IV calculator
+                    implied_vol = ImpliedVolatilityCalculator.calculate(
+                        market_price, params, max_iterations, tolerance, min_vol, max_vol
+                    )
                     
-                st.success(f"Implied Volatility: **{implied_vol*100:.2f}%**")
+                st.success(f"**Implied Volatility: {implied_vol*100:.2f}%**")
                 
-                # Compare with historical volatility
-                vol_diff = (implied_vol - sigma) * 100
-                if vol_diff > 5:
-                    st.warning(f"IV is {vol_diff:.1f}% higher than historical volatility")
-                elif vol_diff < -5:
-                    st.info(f"ℹIV is {abs(vol_diff):.1f}% lower than historical volatility")
-                else:
-                    st.success("IV is close to historical volatility")
+                # Detailed analysis
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    st.metric("Historical Vol", f"{sigma*100:.2f}%")
                     
+                    # Calculate intrinsic value
+                    if option_type == OptionType.CALL:
+                        intrinsic = max(S - K, 0)
+                    else:
+                        intrinsic = max(K - S, 0)
+                    
+                    time_value = market_price - intrinsic
+                    st.metric("Time Value", f"${time_value:.4f}")
+                
+                with col_b:
+                    st.metric("Implied Vol", f"{implied_vol*100:.2f}%")
+                    
+                    # Vol differential
+                    vol_diff = (implied_vol - sigma) * 100
+                    st.metric("Vol Differential", f"{vol_diff:+.2f}%")
+                
+                # Market insights
+                st.subheader("Market Insights")
+                
+                if vol_diff > 10:
+                    st.markdown("""
+                    <div class="risk-alert">
+                        <strong>High Implied Volatility</strong><br>
+                        Market expects significant price movement. Consider volatility strategies.
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif vol_diff < -10:
+                    st.markdown("""
+                    <div style="background: #0066cc; color: white; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                        <strong>Low Implied Volatility</strong><br>
+                        Market expects minimal price movement. Options may be underpriced.
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div class="success-alert">
+                        <strong>Normal Implied Volatility</strong><br>
+                        IV is close to historical volatility. Fair pricing indicated.
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+            except ValueError as e:
+                st.error(f"❌ **Error calculating IV:** {str(e)}")
+                st.info("💡 **Possible reasons:**")
+                st.write("- Market price below intrinsic value")
+                st.write("- Very short time to expiry")
+                st.write("- Extreme market conditions")
+                
             except Exception as e:
-                st.error(f"Error calculating IV: {str(e)}")
+                st.error(f"❌ **Unexpected error:** {str(e)}")
+                st.info("Please check your input parameters and try again.")
     
     with col2:
         st.subheader("Volatility Surface Analysis")
         
-        # Create volatility surface
-        strikes = np.linspace(K * 0.8, K * 1.2, 10)
-        times = np.linspace(0.1, 1.0, 8)
+        # Surface generation options
+        with st.expander("Surface Settings"):
+            surface_points = st.slider("Surface Resolution", 5, 15, 10)
+            vol_smile = st.checkbox("Include Volatility Smile", value=True)
+            base_vol_surface = st.slider("Base Volatility (%)", 10, 50, 20) / 100
         
-        vol_surface = np.zeros((len(times), len(strikes)))
-        
-        for i, t in enumerate(times):
-            for j, k in enumerate(strikes):
-                temp_params = OptionParameters(S, k, t, r, sigma, option_type, q)
+        # Generate volatility surface
+        with st.spinner("Generating volatility surface..."):
+            try:
+                # Create strike and time ranges
+                strikes = np.linspace(K * 0.7, K * 1.3, surface_points)
+                times = np.linspace(0.05, 1.0, surface_points)
+                
+                # Generate IV surface using the enhanced method
+                iv_surface = ImpliedVolatilityCalculator.calculate_iv_surface(
+                    S, strikes, times, r, option_type, q, base_vol_surface, vol_smile
+                )
+                
+                # Create 3D surface plot
+                fig_surface = go.Figure(data=[go.Surface(
+                    z=iv_surface,
+                    x=strikes,
+                    y=times,
+                    colorscale='Viridis',
+                    colorbar=dict(title=dict(text="Implied Vol (%)", side="right")),
+                    showscale=True
+                )])
+                
+                fig_surface.update_layout(
+                    title='Implied Volatility Surface',
+                    scene=dict(
+                        xaxis_title='Strike Price ($)',
+                        yaxis_title='Time to Expiry (Years)',
+                        zaxis_title='Implied Volatility (%)',
+                        camera=dict(eye=dict(x=1.2, y=1.2, z=0.8))
+                    ),
+                    height=500,
+                    margin=dict(l=0, r=0, t=40, b=0)
+                )
+                
+                st.plotly_chart(fig_surface, use_container_width=True)
+                
+                # Surface statistics
+                st.subheader("Surface Statistics")
+                
+                col_a, col_b, col_c, col_d = st.columns(4)
+                
+                with col_a:
+                    st.metric("Min IV", f"{np.min(iv_surface):.1f}%")
+                with col_b:
+                    st.metric("Max IV", f"{np.max(iv_surface):.1f}%")
+                with col_c:
+                    st.metric("Mean IV", f"{np.mean(iv_surface):.1f}%")
+                with col_d:
+                    st.metric("IV Range", f"{np.ptp(iv_surface):.1f}%")
+                
+            except Exception as e:
+                st.error(f"Error generating volatility surface: {str(e)}")
+                st.info("Using simplified visualization...")
+                
+                # Fallback: Simple 2D heatmap
+                fig_heatmap = px.imshow(
+                    np.random.rand(10, 10) * 30 + 15,  # Dummy data
+                    title="Volatility Heatmap (Simplified)",
+                    color_continuous_scale='Viridis',
+                    labels=dict(color="Implied Vol (%)")
+                )
+                st.plotly_chart(fig_heatmap, use_container_width=True)
+    
+    # Volatility term structure
+    st.subheader("Volatility Term Structure")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # ATM volatility term structure
+        try:
+            times_ts = np.linspace(0.05, 2.0, 20)
+            iv_term_structure = []
+            
+            for t in times_ts:
+                if t > 0:
+                    temp_params = OptionParameters(S, K, t, r, sigma, option_type, q)
+                    temp_price = BlackScholesModel.price(temp_params)
+                    
+                    # Add some realistic term structure
+                    market_price_ts = temp_price * (1 + 0.1 * np.exp(-2*t) + np.random.normal(0, 0.01))
+                    
+                    try:
+                        iv_ts = ImpliedVolatilityCalculator.calculate(market_price_ts, temp_params)
+                        iv_term_structure.append(iv_ts * 100)
+                    except:
+                        iv_term_structure.append(sigma * 100)
+                else:
+                    iv_term_structure.append(sigma * 100)
+            
+            fig_ts = go.Figure()
+            fig_ts.add_trace(go.Scatter(
+                x=times_ts,
+                y=iv_term_structure,
+                mode='lines+markers',
+                name='ATM Implied Volatility',
+                line=dict(color='#667eea', width=3),
+                marker=dict(size=6)
+            ))
+            
+            fig_ts.add_hline(y=sigma*100, line_dash="dash", 
+                           annotation_text=f"Historical Vol: {sigma*100:.1f}%")
+            
+            fig_ts.update_layout(
+                title='At-The-Money Volatility Term Structure',
+                xaxis_title='Time to Expiry (Years)',
+                yaxis_title='Implied Volatility (%)',
+                height=400
+            )
+            
+            st.plotly_chart(fig_ts, use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Error generating term structure: {str(e)}")
+    
+    with col2:
+        # Volatility smile/skew
+        try:
+            strikes_smile = np.linspace(K * 0.8, K * 1.2, 15)
+            iv_smile = []
+            
+            for strike in strikes_smile:
+                temp_params = OptionParameters(S, strike, T, r, sigma, option_type, q)
                 temp_price = BlackScholesModel.price(temp_params)
-                # Simulate market price with some noise
-                market_price_sim = temp_price * (1 + np.random.normal(0, 0.05))
+                
+                # Add volatility smile effect
+                moneyness = np.log(S / strike)
+                smile_effect = 0.1 * moneyness**2
+                market_price_smile = temp_price * (1 + smile_effect + np.random.normal(0, 0.01))
+                
                 try:
-                    iv = ImpliedVolatilityCalculator.calculate(market_price_sim, temp_params)
-                    vol_surface[i, j] = iv * 100
+                    iv_smile_val = ImpliedVolatilityCalculator.calculate(market_price_smile, temp_params)
+                    iv_smile.append(iv_smile_val * 100)
                 except:
-                    vol_surface[i, j] = sigma * 100
-        
-        fig_surface = go.Figure(data=[go.Surface(
-            z=vol_surface,
-            x=strikes,
-            y=times,
-            colorscale='Viridis',
-            colorbar_title="Implied Vol (%)"
-        )])
-        
-        fig_surface.update_layout(
-            title='Implied Volatility Surface',
-            scene=dict(
+                    iv_smile.append(sigma * 100)
+            
+            fig_smile = go.Figure()
+            fig_smile.add_trace(go.Scatter(
+                x=strikes_smile,
+                y=iv_smile,
+                mode='lines+markers',
+                name='Volatility Smile',
+                line=dict(color='#4ECDC4', width=3),
+                marker=dict(size=6)
+            ))
+            
+            fig_smile.add_vline(x=K, line_dash="dash", 
+                              annotation_text=f"Strike: ${K:.2f}")
+            fig_smile.add_vline(x=S, line_dash="dash", line_color="green",
+                              annotation_text=f"Spot: ${S:.2f}")
+            
+            fig_smile.update_layout(
+                title='Volatility Smile/Skew',
                 xaxis_title='Strike Price ($)',
-                yaxis_title='Time to Expiry (Years)',
-                zaxis_title='Implied Volatility (%)'
-            ),
-            height=500
-        )
-        
-        st.plotly_chart(fig_surface, use_container_width=True)
+                yaxis_title='Implied Volatility (%)',
+                height=400
+            )
+            
+            st.plotly_chart(fig_smile, use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Error generating volatility smile: {str(e)}")
 
 # Tab 6: Advanced Analytics
 with tab6:

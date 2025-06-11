@@ -2,6 +2,8 @@
 Custom CSS styles for the Streamlit application.
 """
 
+import streamlit as st
+
 def load_css():
     """
     Returns the custom CSS styles as a string.
@@ -44,5 +46,37 @@ def load_css():
         font-weight: bold;
         box_shadow: 0 0 10px rgba(21, 115, 71, 0.4);
     }
+
+    /* NEW CSS TO HIDE STREAMLIT UI ELEMENTS */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    .stDecoration {display: none;}
+
+    /* Hide "Made with Streamlit" */
+    .css-hi6a2p {display: none;}
+    .css-9s5bis {display: none;}
+    .css-1dp5vir {display: none;}
+
+    /* Hide hamburger menu */
+    .css-14xtw13 {display: none;}
+
+    /* Global Styles (Assuming COLORS are defined elsewhere or removed if not used) */
+    .stApp {
+        /* Example: background: linear-gradient(135deg, #2a2a30 0%, #0c1220 100%); */
+        /* Example: color: #f0f2f6; */
+    }
+
+    /* Sidebar Styling (Assuming COLORS are defined elsewhere or removed if not used) */
+    .css-1d391kg {
+        /* Example: background: linear-gradient(180deg, #3a3a40 0%, #2a2a30 100%); */
+        /* Example: border-right: 1px solid #4a4a50; */
+    }
+
+    .css-17eq0hr {
+        background: transparent;
+    }
+
     </style>
     """

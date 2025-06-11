@@ -179,7 +179,7 @@ class BlackScholesModel:
         if params.option_type == OptionType.CALL:
             term2 = params.q * params.S * np.exp(-params.q * params.T) * norm.cdf(d1)
             term3 = -params.r * params.K * np.exp(-params.r * params.T) * norm.cdf(d2)
-            return term1 - term2 + term3
+            return term1 + term2 + term3
         else:
             term2 = -params.q * params.S * np.exp(-params.q * params.T) * norm.cdf(-d1)
             term3 = params.r * params.K * np.exp(-params.r * params.T) * norm.cdf(-d2)

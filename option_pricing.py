@@ -207,37 +207,41 @@ with tab2:
     with col1:
         st.subheader("Greeks Spider Chart")
         
-        # --- MODIFIED CODE START ---
-        # Normalize Greeks for spider chart
-        # Find the absolute maximum value among the Greeks for scaling
-        all_greeks_values = [
-            abs(bs_result.delta), 
-            abs(bs_result.gamma),
-            abs(bs_result.theta), 
-            abs(bs_result.vega), 
-            abs(bs_result.rho)
-        ]
+        # FIXED: Improved normalization for spider chart
+        # Use a different normalization strategy that handles all cases
+        greeks_raw = {
+            'Delta': abs(bs_result.delta),
+            'Gamma': abs(bs_result.gamma),
+            'Theta': abs(bs_result.theta),
+            'Vega': abs(bs_result.vega),
+            'Rho': abs(bs_result.rho)
+        }
         
-        # Handle cases where all Greeks might be zero or very small to avoid division by zero
-        # Add a small epsilon to max_abs_greek if it's zero
-        max_abs_greek = max(all_greeks_values)
-        if max_abs_greek == 0:
-            max_abs_greek = 1 # Fallback to 1 to prevent division by zero
-
-        # Apply normalization to each Greek value
+        # Create normalized values for spider chart (0-100 scale)
+        greeks_normalized = {}
+        for greek, value in greeks_raw.items():
+            if greek == 'Delta':
+                # Delta is already between 0 and 1 for absolute value
+                greeks_normalized[greek] = value * 100
+            elif greek == 'Gamma':
+                # Gamma typically small, scale up
+                greeks_normalized[greek] = min(value * 1000, 100)
+            elif greek == 'Theta':
+                # Theta scale based on daily theta
+                greeks_normalized[greek] = min(abs(value / 365) * 100, 100)
+            elif greek == 'Vega':
+                # Vega scale based on 1% vol change
+                greeks_normalized[greek] = min(value, 100)
+            elif greek == 'Rho':
+                # Rho scale based on 1% rate change
+                greeks_normalized[greek] = min(value, 100)
+        
         greeks_data = {
-            'Greek': ['Delta', 'Gamma', 'Theta', 'Vega', 'Rho'],
-            'Value': [
-                bs_result.delta / max_abs_greek,
-                bs_result.gamma / max_abs_greek,
-                bs_result.theta / max_abs_greek, 
-                bs_result.vega / max_abs_greek, 
-                bs_result.rho / max_abs_greek
-            ],
+            'Greek': list(greeks_normalized.keys()),
+            'Value': list(greeks_normalized.values()),
             'Actual': [bs_result.delta, bs_result.gamma, bs_result.theta,
                       bs_result.vega, bs_result.rho]
         }
-        # --- MODIFIED CODE END ---
         
         fig_spider = go.Figure()
         
@@ -246,17 +250,24 @@ with tab2:
             theta=greeks_data['Greek'],
             fill='toself',
             name='Greeks Profile',
-            line_color='#667eea'
+            line_color='#667eea',
+            text=[f"{greek}: {actual:.4f}" for greek, actual in 
+                  zip(greeks_data['Greek'], greeks_data['Actual'])],
+            hoverinfo='text+theta+r'
         ))
         
         fig_spider.update_layout(
             polar=dict(
                 radialaxis=dict(
                     visible=True,
-                    range=[-1, 1] # Range adjusted to accommodate normalized values
+                    range=[0, 100],
+                    tickmode='linear',
+                    tick0=0,
+                    dtick=20
                 )),
             showlegend=False,
-            height=400
+            height=400,
+            title="Greeks Profile (Normalized)"
         )
         
         st.plotly_chart(fig_spider, use_container_width=True)

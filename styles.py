@@ -147,15 +147,31 @@ def load_css():
         padding: 0.5rem 1.5rem;
         font-weight: 600;
         transition: all 0.3s ease;
+        color: {COLORS['text_secondary']} !important;
     }}
     
     .stTabs [data-baseweb="tab"]:hover {{
         background-color: rgba(197, 132, 247, 0.1);
+        color: {COLORS['text_primary']} !important;
     }}
     
     .stTabs [aria-selected="true"] {{
         background: linear-gradient(135deg, var(--primary) 0%, {COLORS['gradient_end']} 100%);
         box-shadow: 0 4px 15px rgba(197, 132, 247, 0.4);
+        color: white !important;
+    }}
+    
+    .stTabs [aria-selected="true"] span {{
+        color: white !important;
+    }}
+    
+    /* Force white text on active tab - additional selectors for compatibility */
+    .stTabs [aria-selected="true"] * {{
+        color: white !important;
+    }}
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+        color: white !important;
     }}
     
     /* Enhanced Buttons */

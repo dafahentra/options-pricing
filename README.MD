@@ -43,7 +43,14 @@ A comprehensive web application for options pricing, Greeks analysis, and risk m
 
 ## 🖼️ Screenshots
 
-*[Add screenshots of your application here]*
+### Main Dashboard
+![Main Dashboard](screenshots/main-dashboard.png)
+
+### Risk Metrics
+![Risk Metrics](screenshots/risk-metrics.png)
+
+### Greeks Analysis
+![Greeks Analysis](screenshots/greeks-analysis.png)
 
 ## 🚀 Installation
 

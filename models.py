@@ -1,14 +1,3 @@
-"""
-Enhanced Option Pricing Models
-=============================
-
-A comprehensive collection of option pricing models and Greeks calculations
-for financial derivatives analysis.
-
-Author: Senior Developer
-Version: 2.0
-"""
-
 import numpy as np
 from scipy.stats import norm
 from dataclasses import dataclass
@@ -21,13 +10,6 @@ class OptionType(Enum):
     """Enumeration for option types."""
     CALL = "call"
     PUT = "put"
-
-
-class ModelType(Enum):
-    """Enumeration for pricing model types."""
-    BLACK_SCHOLES = "black_scholes"
-    MONTE_CARLO = "monte_carlo"
-    BINOMIAL = "binomial"
 
 
 @dataclass
@@ -82,7 +64,6 @@ class PricingResult:
         theta: Price sensitivity to time decay
         vega: Price sensitivity to volatility
         rho: Price sensitivity to interest rate
-        model_type: Type of model used for pricing
     """
     price: float
     delta: Optional[float] = None
@@ -90,7 +71,6 @@ class PricingResult:
     theta: Optional[float] = None
     vega: Optional[float] = None
     rho: Optional[float] = None
-    model_type: Optional[ModelType] = None
 
 
 class BlackScholesModel:
@@ -216,8 +196,7 @@ class BlackScholesModel:
             gamma=cls.gamma(params),
             theta=cls.theta(params),
             vega=cls.vega(params),
-            rho=cls.rho(params),
-            model_type=ModelType.BLACK_SCHOLES
+            rho=cls.rho(params)
         )
 
 
@@ -294,55 +273,6 @@ class MonteCarloModel:
             option_price = np.exp(-params.r * params.T) * np.mean(payoffs)
         
         return option_price, S_T
-    
-    @staticmethod
-    def calculate_greeks_fd(params: OptionParameters, 
-                           simulations: int = 100000,
-                           epsilon: float = 0.01) -> PricingResult:
-        """
-        Calculate Greeks using finite difference method with Monte Carlo.
-        
-        Args:
-            params: OptionParameters object
-            simulations: Number of simulation paths
-            epsilon: Small change for finite difference
-            
-        Returns:
-            PricingResult with price and Greeks
-        """
-        base_price, _ = MonteCarloModel.price(params, simulations)
-        
-        # Delta calculation
-        params_up = OptionParameters(
-            params.S + epsilon, params.K, params.T,
-            params.r, params.sigma, params.option_type, params.q
-        )
-        params_down = OptionParameters(
-            params.S - epsilon, params.K, params.T,
-            params.r, params.sigma, params.option_type, params.q
-        )
-        price_up, _ = MonteCarloModel.price(params_up, simulations)
-        price_down, _ = MonteCarloModel.price(params_down, simulations)
-        delta = (price_up - price_down) / (2 * epsilon)
-        
-        # Gamma calculation
-        gamma = (price_up - 2 * base_price + price_down) / (epsilon ** 2)
-        
-        # Vega calculation
-        params_vega = OptionParameters(
-            params.S, params.K, params.T,
-            params.r, params.sigma + epsilon, params.option_type, params.q
-        )
-        price_vega, _ = MonteCarloModel.price(params_vega, simulations)
-        vega = (price_vega - base_price) / epsilon
-        
-        return PricingResult(
-            price=base_price,
-            delta=delta,
-            gamma=gamma,
-            vega=vega,
-            model_type=ModelType.MONTE_CARLO
-        )
 
 
 class BinomialModel:
@@ -633,73 +563,3 @@ class ImpliedVolatilityCalculator:
                     iv_surface[i, j] = base_vol * 100
         
         return iv_surface
-
-
-# Convenience functions for backward compatibility
-def black_scholes(S: float, K: float, T: float, r: float, sigma: float, 
-                 option_type: str = 'call', q: float = 0.0) -> float:
-    """
-    Legacy function for Black-Scholes pricing (backward compatibility).
-    
-    Args:
-        S: Current stock price
-        K: Strike price
-        T: Time to maturity
-        r: Risk-free rate
-        sigma: Volatility
-        option_type: 'call' or 'put'
-        q: Dividend yield
-        
-    Returns:
-        Option price
-    """
-    opt_type = OptionType.CALL if option_type.lower() == 'call' else OptionType.PUT
-    params = OptionParameters(S, K, T, r, sigma, opt_type, q)
-    return BlackScholesModel.price(params)
-
-
-def monte_carlo_option(S: float, K: float, T: float, r: float, sigma: float,
-                      simulations: int = 10000, option_type: str = 'call',
-                      q: float = 0.0) -> Tuple[float, np.ndarray]:
-    """
-    Legacy function for Monte Carlo pricing (backward compatibility).
-    
-    Args:
-        S: Current stock price
-        K: Strike price
-        T: Time to maturity
-        r: Risk-free rate
-        sigma: Volatility
-        simulations: Number of simulations
-        option_type: 'call' or 'put'
-        q: Dividend yield
-        
-    Returns:
-        Tuple of (option_price, simulated_prices)
-    """
-    opt_type = OptionType.CALL if option_type.lower() == 'call' else OptionType.PUT
-    params = OptionParameters(S, K, T, r, sigma, opt_type, q)
-    return MonteCarloModel.price(params, simulations)
-
-
-if __name__ == "__main__":
-    # Example usage
-    params = OptionParameters(
-        S=100.0, K=100.0, T=1.0, r=0.05, sigma=0.2, 
-        option_type=OptionType.CALL
-    )
-    
-    # Black-Scholes pricing with Greeks
-    bs_result = BlackScholesModel.calculate_all(params)
-    print(f"Black-Scholes Price: ${bs_result.price:.2f}")
-    print(f"Delta: {bs_result.delta:.4f}")
-    print(f"Gamma: {bs_result.gamma:.4f}")
-    print(f"Vega: {bs_result.vega:.4f}")
-    
-    # Monte Carlo pricing
-    mc_price, _ = MonteCarloModel.price(params, simulations=100000)
-    print(f"Monte Carlo Price: ${mc_price:.2f}")
-    
-    # Binomial pricing
-    bin_price = BinomialModel.price(params, steps=100)
-    print(f"Binomial Price: ${bin_price:.2f}")

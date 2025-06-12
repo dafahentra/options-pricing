@@ -20,17 +20,6 @@ def render_header():
     """, unsafe_allow_html=True)
 
 
-def render_metric_card(title: str, value: str, subtitle: Optional[str] = None):
-    """Render a styled metric card."""
-    st.markdown(f"""
-        <div class="metric-card">
-            <h4>{title}</h4>
-            <h2>{value}</h2>
-            {f'<p>{subtitle}</p>' if subtitle else ''}
-        </div>
-    """, unsafe_allow_html=True)
-
-
 def render_alert(alert_type: str, title: str, message: str):
     """
     Render an alert message.

@@ -12,7 +12,7 @@ def load_css():
     """
     return f"""
     <style>
-    /* ========== DARK MODE OPTIMIZATIONS ========== */
+    /* ========== CSS VARIABLES ========== */
     :root {{
         --primary: {COLORS['primary']};
         --secondary: {COLORS['secondary']};
@@ -25,12 +25,6 @@ def load_css():
         --dark-border: {COLORS['dark_border']};
         --text-primary: {COLORS['text_primary']};
         --text-secondary: {COLORS['text_secondary']};
-    }}
-    
-    /* ========== GLOBAL DARK MODE ========== */
-    .stApp {{
-        background-color: var(--dark-bg);
-        color: var(--text-primary);
     }}
     
     /* ========== MAIN HEADER ========== */
@@ -58,49 +52,6 @@ def load_css():
         font-size: 1.2rem;
         opacity: 0.95;
         font-weight: 300;
-    }}
-    
-    /* ========== METRIC CARDS ========== */
-    .metric-card {{
-        background: linear-gradient(145deg, {COLORS['dark_card']} 0%, rgba(197, 132, 247, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        border-left: 5px solid var(--primary);
-        margin: 0.5rem 0;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        border: 1px solid {COLORS['dark_border']};
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }}
-    
-    .metric-card:hover {{
-        transform: translateY(-4px);
-        box-shadow: 0 8px 30px rgba(197, 132, 247, 0.3);
-        border-color: var(--primary);
-    }}
-    
-    .metric-card h4 {{
-        margin: 0;
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }}
-    
-    .metric-card h2 {{
-        margin: 0.5rem 0 0 0;
-        color: var(--primary);
-        font-size: 2rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }}
-    
-    .metric-card p {{
-        margin: 0.25rem 0 0 0;
-        color: var(--text-secondary);
-        font-size: 0.85rem;
     }}
     
     /* ========== ALERTS FOR DARK MODE ========== */
@@ -181,7 +132,8 @@ def load_css():
         }}
     }}
     
-    /* ========== TABS STYLING FOR DARK MODE ========== */
+    /* ========== ENHANCED COMPONENTS ========== */
+    /* Enhanced Tabs */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
         background-color: {COLORS['dark_card']};
@@ -195,25 +147,20 @@ def load_css():
         padding: 0.5rem 1.5rem;
         font-weight: 600;
         transition: all 0.3s ease;
-        color: var(--text-secondary);
-        background-color: transparent;
     }}
     
     .stTabs [data-baseweb="tab"]:hover {{
         background-color: rgba(197, 132, 247, 0.1);
-        color: var(--primary);
     }}
     
     .stTabs [aria-selected="true"] {{
         background: linear-gradient(135deg, var(--primary) 0%, {COLORS['gradient_end']} 100%);
-        color: white !important;
         box-shadow: 0 4px 15px rgba(197, 132, 247, 0.4);
     }}
     
-    /* ========== BUTTONS FOR DARK MODE ========== */
+    /* Enhanced Buttons */
     .stButton > button {{
         background: linear-gradient(135deg, var(--primary) 0%, {COLORS['gradient_end']} 100%);
-        color: white;
         border: none;
         padding: 0.75rem 2rem;
         font-weight: 600;
@@ -230,29 +177,7 @@ def load_css():
         animation: glow 2s ease-in-out infinite;
     }}
     
-    .stButton > button:active {{
-        transform: translateY(0);
-    }}
-    
-    /* ========== INPUTS FOR DARK MODE ========== */
-    .stNumberInput > div > div > input,
-    .stSelectbox > div > div > select {{
-        background-color: {COLORS['dark_card']};
-        border: 1px solid {COLORS['dark_border']};
-        color: var(--text-primary);
-        border-radius: 8px;
-        padding: 0.5rem;
-        transition: all 0.3s ease;
-    }}
-    
-    .stNumberInput > div > div > input:focus,
-    .stSelectbox > div > div > select:focus {{
-        border-color: var(--primary);
-        box-shadow: 0 0 0 2px rgba(197, 132, 247, 0.2);
-        outline: none;
-    }}
-    
-    /* ========== SLIDERS FOR DARK MODE ========== */
+    /* Enhanced Sliders */
     .stSlider > div > div > div > div {{
         background-color: var(--primary) !important;
     }}
@@ -262,22 +187,7 @@ def load_css():
         box-shadow: 0 0 10px rgba(197, 132, 247, 0.5);
     }}
     
-    /* ========== EXPANDERS FOR DARK MODE ========== */
-    .streamlit-expanderHeader {{
-        background-color: {COLORS['dark_card']};
-        border: 1px solid {COLORS['dark_border']};
-        border-radius: 10px;
-        font-weight: 600;
-        color: var(--text-primary);
-        transition: all 0.3s ease;
-    }}
-    
-    .streamlit-expanderHeader:hover {{
-        background-color: rgba(197, 132, 247, 0.1);
-        border-color: var(--primary);
-    }}
-    
-    /* ========== METRICS FOR DARK MODE ========== */
+    /* Enhanced Metrics */
     [data-testid="metric-container"] {{
         background-color: {COLORS['dark_card']};
         padding: 1.2rem;
@@ -294,7 +204,6 @@ def load_css():
     }}
     
     [data-testid="metric-container"] [data-testid="metric-label"] {{
-        color: var(--text-secondary);
         font-weight: 600;
         text-transform: uppercase;
         font-size: 0.8rem;
@@ -305,10 +214,8 @@ def load_css():
         font-weight: 700;
     }}
     
-    /* ========== DATAFRAMES FOR DARK MODE ========== */
+    /* Enhanced DataFrames */
     .dataframe {{
-        background-color: {COLORS['dark_card']} !important;
-        border: 1px solid {COLORS['dark_border']} !important;
         border-radius: 10px;
         overflow: hidden;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
@@ -316,43 +223,25 @@ def load_css():
     
     .dataframe thead th {{
         background-color: rgba(197, 132, 247, 0.2) !important;
-        color: var(--text-primary) !important;
         font-weight: 600;
         text-transform: uppercase;
         font-size: 0.85rem;
         letter-spacing: 0.5px;
     }}
     
-    .dataframe tbody td {{
-        color: var(--text-primary) !important;
-        border-color: {COLORS['dark_border']} !important;
-    }}
-    
     .dataframe tbody tr:hover {{
         background-color: rgba(197, 132, 247, 0.1) !important;
     }}
     
-    /* ========== SIDEBAR FOR DARK MODE ========== */
-    section[data-testid="stSidebar"] {{
-        background-color: {COLORS['dark_card']};
-        border-right: 1px solid {COLORS['dark_border']};
-    }}
-    
-    section[data-testid="stSidebar"] .stButton > button {{
-        width: 100%;
-        margin-bottom: 0.5rem;
-    }}
-    
-    /* ========== PLOTLY CHARTS DARK MODE ========== */
+    /* Enhanced Plotly Charts */
     .js-plotly-plot {{
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         border: 1px solid {COLORS['dark_border']};
-        background-color: {COLORS['dark_card']};
     }}
     
-    /* ========== FOOTER FOR DARK MODE ========== */
+    /* Footer Enhancement */
     div[style*="text-align: center"] {{
         background-color: {COLORS['dark_card']};
         border-radius: 12px;
@@ -362,14 +251,12 @@ def load_css():
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
     }}
     
-    /* ========== HIDE STREAMLIT ELEMENTS ========== */
+    /* Hide Streamlit Elements */
     #MainMenu {{visibility: hidden;}}
     footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
     .stDeployButton {{display: none;}}
-    .stDecoration {{display: none;}}
     
-    /* ========== SCROLLBAR DARK MODE ========== */
+    /* Enhanced Scrollbar */
     ::-webkit-scrollbar {{
         width: 10px;
         height: 10px;
@@ -388,14 +275,10 @@ def load_css():
         background: var(--primary);
     }}
     
-    /* ========== RESPONSIVE DESIGN ========== */
+    /* Responsive Design */
     @media (max-width: 768px) {{
         .main-header h1 {{
             font-size: 2rem;
-        }}
-        
-        .metric-card {{
-            padding: 1rem;
         }}
         
         .stButton > button {{
